@@ -345,13 +345,20 @@ function App() {
             projects={selectedWorkspace ? selectedWorkspace.projects : [] as any}
             onAssign={async (ticketId, assigneeId, comment) => {
               if (!selectedWorkspace || !selectedProject) return;
-              // optimistic update
-              setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, assignedTo: assigneeId, updatedAt: new Date(), history: [...t.history, { id: Math.random().toString(36).slice(2,10), action: 'assigned', toUser: { id: assigneeId } as any, timestamp: new Date(), userId: 'web', comment }] } : t));
+              const historyEntry = { id: Math.random().toString(36).slice(2,10), action: 'assigned', toUser: { id: assigneeId } as any, timestamp: new Date(), userId: 'web', comment } as any;
+              // optimistic update in list
+              setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, assignedTo: assigneeId, updatedAt: new Date(), history: [...t.history, historyEntry] } : t));
+              // optimistic update in detail
+              if (selectedTicket && selectedTicket.id === ticketId) {
+                setSelectedTicket({ ...selectedTicket, assignedTo: assigneeId, updatedAt: new Date(), history: [...selectedTicket.history, historyEntry] });
+              }
               try {
                 await repo.updateTicketAssignee(selectedWorkspace.id, selectedProject.id, ticketId, assigneeId, comment);
               } catch (e) {
                 const list = await repo.listTickets(selectedWorkspace.id, selectedProject.id);
                 setTickets(list);
+                const found = list.find(t => t.id === ticketId);
+                if (found) setSelectedTicket(found);
               }
             }}
           />
