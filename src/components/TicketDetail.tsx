@@ -41,13 +41,15 @@ interface TicketDetailProps {
   onClose: () => void;
   users: User[];
   projects: Project[];
+  onAssign?: (ticketId: string, assigneeId: string, comment?: string) => Promise<void> | void;
 }
 
 const TicketDetail: React.FC<TicketDetailProps> = ({
   ticket,
   onClose,
   users,
-  projects
+  projects,
+  onAssign
 }) => {
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isLendDialogOpen, setIsLendDialogOpen] = useState(false);
@@ -55,6 +57,7 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
   const [lendComment, setLendComment] = useState('');
   const [selectedAssignee, setSelectedAssignee] = useState<string>('');
   const [selectedLendTarget, setSelectedLendTarget] = useState<string>('');
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -81,25 +84,23 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
   const createdByUser = users.find(u => u.id === ticket.createdBy);
   const project = projects.find(p => p.id === ticket.projectId);
 
-  const handleAssign = () => {
-    setIsAssignDialogOpen(true);
-  };
+  const handleAssign = () => { setIsAssignDialogOpen(true); };
+  const handleLend = () => { setIsLendDialogOpen(true); };
 
-  const handleLend = () => {
-    setIsLendDialogOpen(true);
-  };
-
-  const handleAssignSubmit = () => {
-    // In a real app, this would call an API
-    console.log('Assigning ticket:', { ticketId: ticket.id, assignee: selectedAssignee, comment: assignComment });
-    setIsAssignDialogOpen(false);
-    setAssignComment('');
-    setSelectedAssignee('');
+  const handleAssignSubmit = async () => {
+    if (!selectedAssignee) return;
+    try {
+      setAssignSubmitting(true);
+      if (onAssign) await onAssign(ticket.id, selectedAssignee, assignComment.trim() || undefined);
+      setIsAssignDialogOpen(false);
+      setAssignComment('');
+      setSelectedAssignee('');
+    } finally {
+      setAssignSubmitting(false);
+    }
   };
 
   const handleLendSubmit = () => {
-    // In a real app, this would call an API
-    console.log('Lending ticket:', { ticketId: ticket.id, target: selectedLendTarget, comment: lendComment });
     setIsLendDialogOpen(false);
     setLendComment('');
     setSelectedLendTarget('');
@@ -107,89 +108,35 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
 
   return (
     <Box
-      sx={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        zIndex: 1300,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: 2
-      }}
+      sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}
       onClick={onClose}
     >
-      <Paper
-        sx={{
-          width: '80%',
-          maxWidth: 800,
-          maxHeight: '90vh',
-          overflow: 'auto',
-          position: 'relative'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <Paper sx={{ width: '80%', maxWidth: 800, maxHeight: '90vh', overflow: 'auto', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                {ticket.title}
-              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>{ticket.title}</Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-                <Chip
-                  label={ticket.status}
-                  size="small"
-                  sx={{ backgroundColor: getStatusColor(ticket.status), color: 'white' }}
-                />
-                <Chip
-                  label={ticket.priority}
-                  size="small"
-                  sx={{ backgroundColor: getPriorityColor(ticket.priority), color: 'white' }}
-                />
-                {ticket.type === 'lent' && (
-                  <Chip
-                    icon={<LentIcon />}
-                    label="Lent"
-                    size="small"
-                    color="warning"
-                    variant="outlined"
-                  />
-                )}
+                <Chip label={ticket.status} size="small" sx={{ backgroundColor: getStatusColor(ticket.status), color: 'white' }} />
+                <Chip label={ticket.priority} size="small" sx={{ backgroundColor: getPriorityColor(ticket.priority), color: 'white' }} />
+                {ticket.type === 'lent' && (<Chip icon={<LentIcon />} label="Lent" size="small" color="warning" variant="outlined" />)}
               </Box>
             </Box>
-            <IconButton onClick={onClose}>
-              <CloseIcon />
-            </IconButton>
+            <IconButton onClick={onClose}><CloseIcon /></IconButton>
           </Box>
         </Box>
 
         {/* Content */}
         <Box sx={{ p: 3 }}>
           <Grid container spacing={3}>
-            {/* Main Content */}
             <Grid item xs={12} md={8}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Description
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>
-                {ticket.description}
-              </Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>Description</Typography>
+              <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>{ticket.description}</Typography>
 
-              {/* Tags */}
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Tags
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
-                {ticket.tags.map((tag) => (
-                  <Chip key={tag} label={tag} variant="outlined" />
-                ))}
-              </Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>Tags</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>{ticket.tags.map((tag) => (<Chip key={tag} label={tag} variant="outlined" />))}</Box>
 
-              {/* History */}
               <Accordion>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -202,35 +149,11 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
                     {ticket.history.map((entry) => (
                       <ListItem key={entry.id}>
                         <ListItemAvatar>
-                          <Avatar sx={{ width: 32, height: 32 }}>
-                            {users.find(u => u.id === entry.userId)?.name.charAt(0) || 'U'}
-                          </Avatar>
+                          <Avatar sx={{ width: 32, height: 32 }}>{users.find(u => u.id === entry.userId)?.name.charAt(0) || 'U'}</Avatar>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                {entry.action}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {format(entry.timestamp, 'MMM d, yyyy h:mm a')}
-                              </Typography>
-                            </Box>
-                          }
-                          secondary={
-                            <Box>
-                              {entry.comment && (
-                                <Typography variant="body2" sx={{ mt: 0.5 }}>
-                                  "{entry.comment}"
-                                </Typography>
-                              )}
-                              {entry.fromStatus && entry.toStatus && (
-                                <Typography variant="caption" color="text.secondary">
-                                  Moved from {entry.fromStatus} to {entry.toStatus}
-                                </Typography>
-                              )}
-                            </Box>
-                          }
+                          primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Typography variant="body2" sx={{ fontWeight: 'bold' }}>{entry.action}</Typography><Typography variant="caption" color="text.secondary">{format(entry.timestamp, 'MMM d, yyyy h:mm a')}</Typography></Box>}
+                          secondary={<Box>{entry.comment && (<Typography variant="body2" sx={{ mt: 0.5 }}>&quot;{entry.comment}&quot;</Typography>)}{entry.fromStatus && entry.toStatus && (<Typography variant="caption" color="text.secondary">Moved from {entry.fromStatus} to {entry.toStatus}</Typography>)}</Box>}
                         />
                       </ListItem>
                     ))}
@@ -242,109 +165,30 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
             {/* Sidebar */}
             <Grid item xs={12} md={4}>
               <Paper sx={{ p: 2, mb: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Details
-                </Typography>
-                
+                <Typography variant="h6" sx={{ mb: 2 }}>Details</Typography>
+                <Box sx={{ mb: 2 }}><Typography variant="body2" color="text.secondary">Project</Typography><Typography variant="body1" sx={{ fontWeight: 'bold' }}>{project?.name}</Typography></Box>
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Project
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                    {project?.name}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Assigned To
-                  </Typography>
+                  <Typography variant="body2" color="text.secondary">Assigned To</Typography>
                   {assignedUser ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                      <Avatar sx={{ width: 24, height: 24 }}>
-                        {assignedUser.name.charAt(0)}
-                      </Avatar>
-                      <Typography variant="body1">
-                        {assignedUser.name}
-                      </Typography>
+                      <Avatar sx={{ width: 24, height: 24 }}>{assignedUser.name.charAt(0)}</Avatar>
+                      <Typography variant="body1">{assignedUser.name}</Typography>
                     </Box>
                   ) : (
-                    <Typography variant="body1" color="text.secondary">
-                      Unassigned
-                    </Typography>
+                    <Typography variant="body1" color="text.secondary">Unassigned</Typography>
                   )}
                 </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Created By
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                    <Avatar sx={{ width: 24, height: 24 }}>
-                      {createdByUser?.name.charAt(0)}
-                    </Avatar>
-                    <Typography variant="body1">
-                      {createdByUser?.name}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Created
-                  </Typography>
-                  <Typography variant="body1">
-                    {format(ticket.createdAt, 'MMM d, yyyy h:mm a')}
-                  </Typography>
-                </Box>
-
-                {ticket.dueDate && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Due Date
-                    </Typography>
-                    <Typography variant="body1">
-                      {format(ticket.dueDate, 'MMM d, yyyy')}
-                    </Typography>
-                  </Box>
-                )}
+                <Box sx={{ mb: 2 }}><Typography variant="body2" color="text.secondary">Created By</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}><Avatar sx={{ width: 24, height: 24 }}>{createdByUser?.name.charAt(0)}</Avatar><Typography variant="body1">{createdByUser?.name}</Typography></Box></Box>
+                <Box sx={{ mb: 2 }}><Typography variant="body2" color="text.secondary">Created</Typography><Typography variant="body1">{format(ticket.createdAt, 'MMM d, yyyy h:mm a')}</Typography></Box>
+                {ticket.dueDate && (<Box sx={{ mb: 2 }}><Typography variant="body2" color="text.secondary">Due Date</Typography><Typography variant="body1">{format(ticket.dueDate, 'MMM d, yyyy')}</Typography></Box>)}
               </Paper>
 
-              {/* Actions */}
               <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Actions
-                </Typography>
-                
+                <Typography variant="h6" sx={{ mb: 2 }}>Actions</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<AssignmentIcon />}
-                    onClick={handleAssign}
-                    fullWidth
-                  >
-                    Assign
-                  </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    startIcon={<LentIcon />}
-                    onClick={handleLend}
-                    fullWidth
-                  >
-                    Lend
-                  </Button>
-                  
-                  {ticket.type === 'lent' && (
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      startIcon={<SwapHoriz />}
-                      fullWidth
-                    >
-                      Return
-                    </Button>
-                  )}
+                  <Button variant="outlined" startIcon={<AssignmentIcon />} onClick={handleAssign} fullWidth>Assign</Button>
+                  <Button variant="outlined" startIcon={<LentIcon />} onClick={handleLend} fullWidth>Lend</Button>
+                  {ticket.type === 'lent' && (<Button variant="contained" color="warning" startIcon={<SwapHoriz />} fullWidth>Return</Button>)}
                 </Box>
               </Paper>
             </Grid>
@@ -352,81 +196,38 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
         </Box>
       </Paper>
 
-      {/* Assign Dialog */}
       <Dialog open={isAssignDialogOpen} onClose={() => setIsAssignDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Assign Ticket</DialogTitle>
         <DialogContent>
           <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
             <InputLabel>Assign to</InputLabel>
-            <Select
-              value={selectedAssignee}
-              onChange={(e) => setSelectedAssignee(e.target.value)}
-              label="Assign to"
-            >
-              {users.map((user) => (
-                <MenuItem key={user.id} value={user.id}>
-                  {user.name}
-                </MenuItem>
-              ))}
+            <Select value={selectedAssignee} onChange={(e) => setSelectedAssignee(e.target.value)} label="Assign to">
+              {users.map((user) => (<MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>))}
             </Select>
           </FormControl>
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Comment (optional)"
-            value={assignComment}
-            onChange={(e) => setAssignComment(e.target.value)}
-            placeholder="Add any guidance for the assignee..."
-          />
+          <TextField fullWidth multiline rows={3} label="Comment (optional)" value={assignComment} onChange={(e) => setAssignComment(e.target.value)} placeholder="Add any guidance for the assignee..." />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setIsAssignDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAssignSubmit} variant="contained" disabled={!selectedAssignee}>
-            Assign
-          </Button>
+          <Button onClick={handleAssignSubmit} variant="contained" disabled={!selectedAssignee || assignSubmitting}>{assignSubmitting ? 'Assigning…' : 'Assign'}</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Lend Dialog */}
       <Dialog open={isLendDialogOpen} onClose={() => setIsLendDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Lend Ticket</DialogTitle>
         <DialogContent>
           <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
             <InputLabel>Lend to</InputLabel>
-            <Select
-              value={selectedLendTarget}
-              onChange={(e) => setSelectedLendTarget(e.target.value)}
-              label="Lend to"
-            >
-              {users.map((user) => (
-                <MenuItem key={user.id} value={user.id}>
-                  {user.name}
-                </MenuItem>
-              ))}
-              {projects.map((project) => (
-                <MenuItem key={project.id} value={project.id}>
-                  {project.name} (Project)
-                </MenuItem>
-              ))}
+            <Select value={selectedLendTarget} onChange={(e) => setSelectedLendTarget(e.target.value)} label="Lend to">
+              {users.map((user) => (<MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>))}
+              {projects.map((project) => (<MenuItem key={project.id} value={project.id}>{project.name} (Project)</MenuItem>))}
             </Select>
           </FormControl>
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Comment (required)"
-            value={lendComment}
-            onChange={(e) => setLendComment(e.target.value)}
-            placeholder="Explain why you're lending this ticket..."
-            required
-          />
+          <TextField fullWidth multiline rows={3} label="Comment (required)" value={lendComment} onChange={(e) => setLendComment(e.target.value)} placeholder="Explain why you're lending this ticket..." required />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setIsLendDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleLendSubmit} variant="contained" disabled={!selectedLendTarget || !lendComment.trim()}>
-            Lend
-          </Button>
+          <Button onClick={handleLendSubmit} variant="contained" disabled={!selectedLendTarget || !lendComment.trim()}>Lend</Button>
         </DialogActions>
       </Dialog>
     </Box>

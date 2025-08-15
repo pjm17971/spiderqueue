@@ -32,6 +32,7 @@ export interface WorkspacesRepo {
   listTickets(workspaceId: string, projectId: string): Promise<Ticket[]>;
   createTicket(workspaceId: string, projectId: string, data: CreateTicketData): Promise<Ticket>;
   updateTicketStatus(workspaceId: string, projectId: string, ticketId: string, toStatus: TicketStatus): Promise<void>;
+  updateTicketAssignee(workspaceId: string, projectId: string, ticketId: string, assigneeId: string | undefined, comment?: string): Promise<void>;
 }
 
 class LocalWorkspacesRepo implements WorkspacesRepo {
@@ -62,6 +63,9 @@ class LocalWorkspacesRepo implements WorkspacesRepo {
     };
   }
   async updateTicketStatus(_workspaceId: string, _projectId: string, _ticketId: string, _toStatus: TicketStatus) {
+    return; // local no-op; UI state is the source of truth in local mode
+  }
+  async updateTicketAssignee(_workspaceId: string, _projectId: string, _ticketId: string, _assigneeId: string | undefined, _comment?: string) {
     return; // local no-op; UI state is the source of truth in local mode
   }
 }
@@ -264,6 +268,16 @@ class FirestoreWorkspacesRepo implements WorkspacesRepo {
     const fromStatus = data?.status || 'inbox';
     hist.push({ id: nanoid(8), action: 'moved', fromStatus, toStatus, timestamp: nowIso, userId: 'web' });
     await updateDoc(tRef, { status: toStatus, updatedAt: nowIso, history: hist });
+  }
+
+  async updateTicketAssignee(workspaceId: string, projectId: string, ticketId: string, assigneeId: string | undefined, comment?: string): Promise<void> {
+    const tRef = doc(this.db, 'workspaces', workspaceId, 'projects', projectId, 'tickets', ticketId);
+    const snap = await getDoc(tRef);
+    const data = snap.data() || {} as any;
+    const hist = Array.isArray(data.history) ? data.history : [];
+    const nowIso = new Date().toISOString();
+    hist.push({ id: nanoid(8), action: 'assigned', toUser: assigneeId ? { id: assigneeId } : undefined, timestamp: nowIso, userId: 'web', comment });
+    await updateDoc(tRef, { assignedTo: assigneeId || null, updatedAt: nowIso, history: hist });
   }
 }
 
