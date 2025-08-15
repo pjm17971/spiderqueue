@@ -322,6 +322,7 @@ function App() {
                   selectedTags={selectedTags}
                   onTicketSelect={handleTicketSelect}
                   onMoveTicket={handleMoveTicket}
+                  users={workspaceUsers}
                 />
               </Box>
             </>

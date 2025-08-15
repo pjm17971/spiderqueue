@@ -27,6 +27,7 @@ interface TicketBoardProps {
   selectedTags: string[];
   onTicketSelect: (ticket: Ticket) => void;
   onMoveTicket: (ticketId: string, toStatus: TicketStatus) => void;
+  users: User[];
 }
 
 const TicketBoard: React.FC<TicketBoardProps> = ({
@@ -38,7 +39,8 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
   searchText,
   selectedTags,
   onTicketSelect,
-  onMoveTicket
+  onMoveTicket,
+  users
 }) => {
   const columns: { id: TicketStatus; title: string; color: string }[] = [
     { id: 'inbox', title: 'Inbox', color: '#e3f2fd' },
@@ -47,6 +49,12 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
     { id: 'in-progress', title: 'In Progress', color: '#e8f5e8' },
     { id: 'done', title: 'Done', color: '#f1f8e9' }
   ];
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, User>();
+    users.forEach(u => map.set(u.id, u));
+    return map;
+  }, [users]);
 
   const filteredTickets = useMemo(() => {
     let filtered = tickets.filter(ticket => ticket.projectId === project.id);
@@ -100,7 +108,8 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
   };
 
   const TicketCard: React.FC<{ ticket: Ticket; index: number }> = ({ ticket, index }) => {
-    const assignedUser = ticket.assignedTo ? { id: ticket.assignedTo, name: ticket.assignedTo } : null;
+    const assigned = ticket.assignedTo ? userMap.get(ticket.assignedTo) : undefined;
+    const displayName = assigned?.name || ticket.assignedTo || undefined;
     const downPos = useRef<{ x: number; y: number } | null>(null);
 
     return (
@@ -148,10 +157,10 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
               </Typography>
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {assignedUser ? (
+                {displayName ? (
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Avatar sx={{ width: 24, height: 24, mr: 1 }}>{assignedUser.name.charAt(0)}</Avatar>
-                    <Typography variant="caption" color="text.secondary">{assignedUser.name}</Typography>
+                    <Avatar sx={{ width: 24, height: 24, mr: 1 }}>{displayName.charAt(0).toUpperCase()}</Avatar>
+                    <Typography variant="caption" color="text.secondary">{displayName}</Typography>
                   </Box>
                 ) : (
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
