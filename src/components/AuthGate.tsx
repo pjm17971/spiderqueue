@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Button, Paper, Typography, TextField, Stack, Divider, Alert } from '@mui/material';
 import { Google } from '@mui/icons-material';
 import { isFirebaseEnabled, signInWithGooglePopup, subscribeAuthState } from '../lib/firebase';
+import { getProfilesRepo } from '../lib/repos/profilesRepo';
 
 interface AuthGateProps {
   onAuthed: (email: string) => void;
@@ -10,10 +11,24 @@ interface AuthGateProps {
 const AuthGate: React.FC<AuthGateProps> = ({ onAuthed }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | undefined>();
+  const profiles = getProfilesRepo();
 
   useEffect(() => {
-    const unsub = subscribeAuthState((user) => {
-      if (user?.email) onAuthed(user.email);
+    const unsub = subscribeAuthState(async (user) => {
+      try {
+        if (user?.email) {
+          // Ensure profile exists with a sensible display name
+          const existing = await profiles.getName(user.email);
+          if (!existing) {
+            const fallback = user.displayName || user.email.split('@')[0];
+            await profiles.setName(user.email, fallback);
+          }
+          onAuthed(user.email);
+        }
+      } catch {
+        // ignore profile write errors for auth flow
+        if (user?.email) onAuthed(user.email);
+      }
     });
     return () => unsub();
   }, [onAuthed]);
@@ -21,7 +36,15 @@ const AuthGate: React.FC<AuthGateProps> = ({ onAuthed }) => {
   async function handleGoogle() {
     try {
       const user = await signInWithGooglePopup();
-      if (user.email) onAuthed(user.email);
+      if (user.email) {
+        // Ensure profile exists immediately after sign-in
+        const existing = await profiles.getName(user.email);
+        if (!existing) {
+          const fallback = user.displayName || user.email.split('@')[0];
+          await profiles.setName(user.email, fallback);
+        }
+        onAuthed(user.email);
+      }
     } catch (e) {
       setError('Google sign-in failed');
     }
