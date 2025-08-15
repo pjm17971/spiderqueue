@@ -27,33 +27,41 @@ export function initFirebase() {
 
     initializeApp(config);
     appInitialized = true;
+    firebaseAvailable = true;
   } catch (e) {
     firebaseAvailable = false;
   }
 }
 
 export function isFirebaseEnabled() {
-  return firebaseAvailable;
+  initFirebase();
+  return firebaseAvailable && appInitialized;
 }
 
-export function getFirebaseAuth() {
+export function subscribeAuthState(cb: (user: FirebaseUser | null) => void) {
   initFirebase();
-  return getAuth();
+  if (!appInitialized) {
+    // No-op unsubscribe
+    return () => {};
+  }
+  const auth = getAuth();
+  return onAuthStateChanged(auth, (user) => cb(user));
 }
 
 export async function signInWithGooglePopup(): Promise<FirebaseUser> {
-  const auth = getFirebaseAuth();
+  initFirebase();
+  if (!appInitialized) {
+    throw new Error('Firebase not configured');
+  }
+  const auth = getAuth();
   const provider = new GoogleAuthProvider();
   const result = await signInWithPopup(auth, provider);
   return result.user;
 }
 
 export async function signOutFirebase(): Promise<void> {
-  const auth = getFirebaseAuth();
+  initFirebase();
+  if (!appInitialized) return;
+  const auth = getAuth();
   await signOut(auth);
-}
-
-export function subscribeAuthState(cb: (user: FirebaseUser | null) => void) {
-  const auth = getFirebaseAuth();
-  return onAuthStateChanged(auth, (user) => cb(user));
 }
