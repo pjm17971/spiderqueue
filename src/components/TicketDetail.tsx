@@ -84,7 +84,11 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
   const createdByUser = users.find(u => u.id === ticket.createdBy);
   const project = projects.find(p => p.id === ticket.projectId);
 
-  const handleAssign = () => { setIsAssignDialogOpen(true); };
+  const handleAssign = () => { 
+    setSelectedAssignee(ticket.assignedTo || '');
+    setAssignComment('');
+    setIsAssignDialogOpen(true); 
+  };
   const handleLend = () => { setIsLendDialogOpen(true); };
 
   const handleAssignSubmit = async () => {
@@ -109,7 +113,6 @@ const TicketDetail: React.FC<TicketDetailProps> = ({
   return (
     <Box
       sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}
-      onClick={onClose}
     >
       <Paper sx={{ width: '80%', maxWidth: 800, maxHeight: '90vh', overflow: 'auto', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
