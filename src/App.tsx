@@ -33,14 +33,12 @@ import WorkspaceCreateDialog from './components/WorkspaceCreateDialog';
 
 // Types
 import type { Project, Ticket, User, CreateTicketData } from './types';
-import type { StoredWorkspace } from './lib/store';
+import type { StoredWorkspace, WorkspaceMember } from './lib/store';
 
 // Repo
 import { getWorkspacesRepo } from './lib/repos/workspacesRepo';
 import { signOutFirebase, isFirebaseEnabled } from './lib/firebase';
-
-// Mock users only
-import { mockUsers } from './data/mockData';
+import { getProfilesRepo } from './lib/repos/profilesRepo';
 
 const theme = createTheme({
   palette: {
@@ -54,11 +52,13 @@ const drawerWidth = 280;
 
 function App() {
   const repo = getWorkspacesRepo();
+  const profiles = getProfilesRepo();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<StoredWorkspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [filterView, setFilterView] = useState<'home' | 'person' | 'list'>('home');
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
@@ -68,8 +68,8 @@ function App() {
   const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [isCreateWsOpen, setIsCreateWsOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Menus
   const [plusAnchor, setPlusAnchor] = useState<null | HTMLElement>(null);
@@ -90,6 +90,30 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail, refreshKey]);
 
+  // Load members for the selected workspace
+  useEffect(() => {
+    (async () => {
+      if (selectedWorkspaceId) {
+        try {
+          const m = await repo.listMembers(selectedWorkspaceId);
+          // resolve names
+          const withNames = await Promise.all(
+            m.map(async (mem) => {
+              const name = await profiles.getName(mem.email);
+              return { ...mem, name: name || mem.email } as any;
+            })
+          );
+          setMembers(withNames as any);
+        } catch {
+          setMembers([]);
+        }
+      } else {
+        setMembers([]);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWorkspaceId, refreshKey]);
+
   useEffect(() => {
     (async () => {
       if (selectedWorkspace && selectedProject) {
@@ -106,6 +130,11 @@ function App() {
     () => workspaces.find(w => w.id === selectedWorkspaceId) || null,
     [workspaces, selectedWorkspaceId]
   );
+
+  // Derive user list from workspace members (use email as id and display)
+  const workspaceUsers: User[] = useMemo(() => {
+    return members.map((m: any) => ({ id: m.email, name: m.name || m.email, email: m.email } as User));
+  }, [members]);
 
   const handleSelectWorkspaceById = (id: string) => {
     setSelectedWorkspaceId(id);
@@ -278,7 +307,7 @@ function App() {
                 selectedTags={selectedTags}
                 onTagsChange={setSelectedTags}
                 onCreateTicket={handleCreateTicket}
-                users={mockUsers}
+                users={workspaceUsers}
                 showListControls={filterView === 'list'}
               />
 
@@ -311,7 +340,7 @@ function App() {
           <TicketDetail
             ticket={selectedTicket}
             onClose={handleCloseTicketDetail}
-            users={mockUsers}
+            users={workspaceUsers}
             projects={selectedWorkspace ? selectedWorkspace.projects : [] as any}
           />
         )}
@@ -320,7 +349,7 @@ function App() {
           open={isCreateTicketOpen}
           onClose={handleCloseCreateTicket}
           project={selectedProject}
-          users={mockUsers}
+          users={workspaceUsers}
           onCreate={submitCreateTicket}
         />
 
