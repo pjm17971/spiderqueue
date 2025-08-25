@@ -15,7 +15,9 @@ import {
   Chip,
   Stack,
   Typography,
-  Divider
+  Divider,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -37,6 +39,9 @@ interface FilterBarProps {
   onCreateTicket: () => void;
   users: User[];
   showListControls: boolean;
+  projectName?: string;
+  personMode?: 'overview' | 'assign';
+  onPersonModeChange?: (mode: 'overview' | 'assign') => void;
 }
 
 const FilterBar: React.FC<FilterBarProps> = ({
@@ -50,7 +55,10 @@ const FilterBar: React.FC<FilterBarProps> = ({
   onTagsChange,
   onCreateTicket,
   users,
-  showListControls
+  showListControls,
+  projectName,
+  personMode,
+  onPersonModeChange
 }) => {
   const handleTagDelete = (tagToDelete: string) => {
     onTagsChange(selectedTags.filter(tag => tag !== tagToDelete));
@@ -67,34 +75,21 @@ const FilterBar: React.FC<FilterBarProps> = ({
   };
 
   return (
-    <Paper 
-      elevation={1} 
-      sx={{ 
-        p: 2, 
-        mb: 2, 
-        mx: 2, 
-        mt: 2,
-        backgroundColor: 'background.paper'
-      }}
-    >
+    <Paper elevation={1} sx={{ p: 2, mb: 2, mx: 2, mt: 2, backgroundColor: 'background.paper' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
         {/* View Selection */}
         <Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             View:
           </Typography>
-          <RadioGroup
-            row
-            value={filterView}
-            onChange={(e) => onFilterViewChange(e.target.value as 'home' | 'person' | 'list')}
-          >
+          <RadioGroup row value={filterView} onChange={(e) => onFilterViewChange(e.target.value as 'home' | 'person' | 'list')}>
             <FormControlLabel
               value="home"
               control={<Radio size="small" />}
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <HomeIcon fontSize="small" />
-                  <Typography variant="body2">Home</Typography>
+                  <Typography variant="body2">{projectName || 'Home'}</Typography>
                 </Box>
               }
             />
@@ -104,7 +99,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <PersonIcon fontSize="small" />
-                  <Typography variant="body2">Person</Typography>
+                  <Typography variant="body2">My Queue</Typography>
                 </Box>
               }
             />
@@ -120,6 +115,25 @@ const FilterBar: React.FC<FilterBarProps> = ({
             />
           </RadioGroup>
         </Box>
+
+        {/* Person mode controls */}
+        {filterView === 'person' && (
+          <>
+            <Divider orientation="vertical" flexItem />
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Mode:</Typography>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={personMode || 'overview'}
+                onChange={(_, v) => v && onPersonModeChange && onPersonModeChange(v)}
+              >
+                <ToggleButton value="overview">Overview</ToggleButton>
+                <ToggleButton value="assign">Assign</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          </>
+        )}
 
         <Divider orientation="vertical" flexItem />
 
@@ -137,14 +151,10 @@ const FilterBar: React.FC<FilterBarProps> = ({
                   label="People"
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => {
+                      {(selected as string[]).map((value) => {
                         const user = users.find(u => u.id === value);
                         return (
-                          <Chip 
-                            key={value} 
-                            label={user?.name || value} 
-                            size="small" 
-                          />
+                          <Chip key={value} label={user?.name || value} size="small" />
                         );
                       })}
                     </Box>
@@ -161,13 +171,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
 
             {/* Search */}
             <Box sx={{ minWidth: 200 }}>
-              <TextField
-                size="small"
-                placeholder="Search tickets..."
-                value={searchText}
-                onChange={(e) => onSearchTextChange(e.target.value)}
-                fullWidth
-              />
+              <TextField size="small" placeholder="Search tickets..." value={searchText} onChange={(e) => onSearchTextChange(e.target.value)} fullWidth />
             </Box>
 
             {/* Tags */}
@@ -181,12 +185,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
                   startAdornment: selectedTags.length > 0 && (
                     <Stack direction="row" spacing={0.5} sx={{ mr: 1 }}>
                       {selectedTags.map((tag) => (
-                        <Chip
-                          key={tag}
-                          label={tag}
-                          size="small"
-                          onDelete={() => handleTagDelete(tag)}
-                        />
+                        <Chip key={tag} label={tag} size="small" onDelete={() => handleTagDelete(tag)} />
                       ))}
                     </Stack>
                   ),
@@ -199,12 +198,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Create Ticket Button */}
-        <Button
-          variant="contained"
-          startIcon={<CreateIcon />}
-          onClick={onCreateTicket}
-          sx={{ ml: 'auto' }}
-        >
+        <Button variant="contained" startIcon={<CreateIcon />} onClick={onCreateTicket} sx={{ ml: 'auto' }}>
           Create Ticket
         </Button>
       </Box>

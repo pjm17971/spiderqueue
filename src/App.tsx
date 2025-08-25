@@ -61,6 +61,7 @@ function App() {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [filterView, setFilterView] = useState<'home' | 'person' | 'list'>('home');
+  const [personMode, setPersonMode] = useState<'overview' | 'assign'>('overview');
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -82,34 +83,22 @@ function App() {
       if (userEmail) {
         const list = await repo.getUserWorkspaces(userEmail);
         setWorkspaces(list);
-        if (!selectedWorkspaceId && list.length > 0) {
-          setSelectedWorkspaceId(list[0].id);
-        }
+        if (!selectedWorkspaceId && list.length > 0) setSelectedWorkspaceId(list[0].id);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail, refreshKey]);
 
-  // Load members for the selected workspace
+  // Load members and resolve names
   useEffect(() => {
     (async () => {
       if (selectedWorkspaceId) {
         try {
           const m = await repo.listMembers(selectedWorkspaceId);
-          // resolve names
-          const withNames = await Promise.all(
-            m.map(async (mem) => {
-              const name = await profiles.getName(mem.email);
-              return { ...mem, name: name || mem.email } as any;
-            })
-          );
+          const withNames = await Promise.all(m.map(async mem => ({ ...mem, name: (await profiles.getName(mem.email)) || mem.email })));
           setMembers(withNames as any);
-        } catch {
-          setMembers([]);
-        }
-      } else {
-        setMembers([]);
-      }
+        } catch { setMembers([]); }
+      } else setMembers([]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId, refreshKey]);
@@ -119,9 +108,7 @@ function App() {
       if (selectedWorkspace && selectedProject) {
         const list = await repo.listTickets(selectedWorkspace.id, selectedProject.id);
         setTickets(list);
-      } else {
-        setTickets([]);
-      }
+      } else setTickets([]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId, selectedProject?.id, refreshKey]);
@@ -131,16 +118,9 @@ function App() {
     [workspaces, selectedWorkspaceId]
   );
 
-  // Derive user list from workspace members (use email as id and display)
-  const workspaceUsers: User[] = useMemo(() => {
-    return members.map((m: any) => ({ id: m.email, name: m.name || m.email, email: m.email } as User));
-  }, [members]);
+  const workspaceUsers: User[] = useMemo(() => members.map((m: any) => ({ id: m.email, name: m.name || m.email, email: m.email } as User)), [members]);
 
-  const handleSelectWorkspaceById = (id: string) => {
-    setSelectedWorkspaceId(id);
-    setSelectedProject(null);
-    setSelectedUser(null);
-  };
+  const handleSelectWorkspaceById = (id: string) => { setSelectedWorkspaceId(id); setSelectedProject(null); setSelectedUser(null); };
 
   const handleCreateWorkspace = async () => {
     if (!userEmail) return;
@@ -157,27 +137,17 @@ function App() {
     setSelectedWorkspaceId(ws.id);
   };
 
-  const handleProjectSelect = (project: Project) => {
-    setSelectedProject(project);
-    setSelectedUser(null);
-  };
+  const handleProjectSelect = (project: Project) => { setSelectedProject(project); setSelectedUser(null); };
 
   const handleCreateProject = async (name: string, description?: string) => {
     if (!selectedWorkspace) return;
     const created = await repo.addProject(selectedWorkspace.id, name, description);
-    if (created) {
-      setRefreshKey(k => k + 1);
-      setSelectedProject(created);
-    }
+    if (created) { setRefreshKey(k => k + 1); setSelectedProject(created); }
   };
 
   const handleFilterViewChange = (view: 'home' | 'person' | 'list') => {
     setFilterView(view);
-    if (view !== 'list') {
-      setSelectedPeople([]);
-      setSearchText('');
-      setSelectedTags([]);
-    }
+    if (view !== 'list') { setSelectedPeople([]); setSearchText(''); setSelectedTags([]); }
   };
 
   const handlePeopleChange = (event: SelectChangeEvent<string[]>) => {
@@ -199,28 +169,25 @@ function App() {
   const handleMoveTicket = async (ticketId: string, toStatus: 'inbox' | 'hold' | 'on-deck' | 'in-progress' | 'done') => {
     if (!selectedWorkspace || !selectedProject) return;
     setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: toStatus, updatedAt: new Date() } : t));
-    try {
-      await repo.updateTicketStatus(selectedWorkspace.id, selectedProject.id, ticketId, toStatus);
-    } catch (e) {
-      const list = await repo.listTickets(selectedWorkspace.id, selectedProject.id);
-      setTickets(list);
-    }
+    try { await repo.updateTicketStatus(selectedWorkspace.id, selectedProject.id, ticketId, toStatus); }
+    catch { const list = await repo.listTickets(selectedWorkspace.id, selectedProject.id); setTickets(list); }
+  };
+
+  const handleAssignTicket = async (ticketId: string, assigneeId: string | undefined, comment?: string) => {
+    if (!selectedWorkspace || !selectedProject) return;
+    const hist = { id: Math.random().toString(36).slice(2,10), action: 'assigned', toUser: assigneeId ? { id: assigneeId } as any : undefined, timestamp: new Date(), userId: 'web', comment } as any;
+    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, assignedTo: assigneeId, updatedAt: new Date(), history: [...t.history, hist] } : t));
+    if (selectedTicket && selectedTicket.id === ticketId) setSelectedTicket({ ...selectedTicket, assignedTo: assigneeId, updatedAt: new Date(), history: [...selectedTicket.history, hist] });
+    try { await repo.updateTicketAssignee(selectedWorkspace.id, selectedProject.id, ticketId, assigneeId, comment); }
+    catch { const list = await repo.listTickets(selectedWorkspace.id, selectedProject.id); setTickets(list); const found = list.find(t => t.id === ticketId); if (found) setSelectedTicket(found); }
   };
 
   async function handleLogout() {
-    try {
-      if (isFirebaseEnabled()) await signOutFirebase();
-    } catch {}
-    setUserEmail(null);
-    setWorkspaces([]);
-    setSelectedWorkspaceId('');
-    setSelectedProject(null);
-    setTickets([]);
+    try { if (isFirebaseEnabled()) await signOutFirebase(); } catch {}
+    setUserEmail(null); setWorkspaces([]); setSelectedWorkspaceId(''); setSelectedProject(null); setTickets([]);
   }
 
-  if (!userEmail) {
-    return <AuthGate onAuthed={setUserEmail} />;
-    } 
+  if (!userEmail) { return <AuthGate onAuthed={setUserEmail} />; }
 
   return (
     <ThemeProvider theme={theme}>
@@ -229,77 +196,36 @@ function App() {
         
         <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
           <Toolbar>
-            <Typography variant="h6" noWrap component="div">
-              SPIDERQUEUE
-            </Typography>
+            <Typography variant="h6" noWrap component="div">SPIDERQUEUE</Typography>
             <Box sx={{ flexGrow: 1 }} />
-
-            {/* Workspace Selector */}
-            <WorkspaceSelector 
-              workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
-              selectedWorkspaceId={selectedWorkspaceId}
-              onSelectById={handleSelectWorkspaceById}
-            />
-
-            {/* Plus menu */}
-            <IconButton color="inherit" onClick={(e) => setPlusAnchor(e.currentTarget)} sx={{ ml: 1 }} aria-label="create-or-join">
-              <AddCircleOutline />
-            </IconButton>
+            <WorkspaceSelector workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))} selectedWorkspaceId={selectedWorkspaceId} onSelectById={handleSelectWorkspaceById} />
+            <IconButton color="inherit" onClick={(e) => setPlusAnchor(e.currentTarget)} sx={{ ml: 1 }} aria-label="create-or-join"><AddCircleOutline /></IconButton>
             <Menu anchorEl={plusAnchor} open={plusOpen} onClose={() => setPlusAnchor(null)}>
-              <MenuItem onClick={() => { setPlusAnchor(null); setIsCreateWsOpen(true); }}>
-                <ListItemIcon><AddIcon fontSize="small" /></ListItemIcon>
-                <ListItemText>Create new…</ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => { setPlusAnchor(null); setIsInviteOpen(true); }}>
-                <ListItemIcon><MailIcon fontSize="small" /></ListItemIcon>
-                <ListItemText>Join existing…</ListItemText>
-              </MenuItem>
+              <MenuItem onClick={() => { setPlusAnchor(null); setIsCreateWsOpen(true); }}><ListItemIcon><AddIcon fontSize="small" /></ListItemIcon><ListItemText>Create new…</ListItemText></MenuItem>
+              <MenuItem onClick={() => { setPlusAnchor(null); setIsInviteOpen(true); }}><ListItemIcon><MailIcon fontSize="small" /></ListItemIcon><ListItemText>Join existing…</ListItemText></MenuItem>
             </Menu>
-
-            {/* Settings */}
-            <IconButton color="inherit" onClick={() => setIsSettingsOpen(true)} disabled={!selectedWorkspace} sx={{ ml: 1 }} aria-label="workspace-settings">
-              <SettingsIcon />
-            </IconButton>
-
-            {/* Profile menu */}
-            <IconButton color="inherit" onClick={(e) => setProfileAnchor(e.currentTarget)} sx={{ ml: 1 }} aria-label="profile-menu">
-              <AccountCircle />
-            </IconButton>
+            <IconButton color="inherit" onClick={() => setIsSettingsOpen(true)} disabled={!selectedWorkspace} sx={{ ml: 1 }} aria-label="workspace-settings"><SettingsIcon /></IconButton>
+            <IconButton color="inherit" onClick={(e) => setProfileAnchor(e.currentTarget)} sx={{ ml: 1 }} aria-label="profile-menu"><AccountCircle /></IconButton>
             <Menu anchorEl={profileAnchor} open={profileOpen} onClose={() => setProfileAnchor(null)}>
-              <MenuItem onClick={() => { setProfileAnchor(null); handleLogout(); }}>
-                <ListItemText>Log out</ListItemText>
-              </MenuItem>
+              <MenuItem onClick={() => { setProfileAnchor(null); handleLogout(); }}><ListItemText>Log out</ListItemText></MenuItem>
             </Menu>
           </Toolbar>
         </AppBar>
 
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' },
-          }}
-        >
+        <Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' } }}>
           <Toolbar />
           <Box sx={{ overflow: 'auto' }}>
-            <ProjectSidebar
-              projects={selectedWorkspace?.projects || []}
-              selectedProject={selectedProject}
-              onProjectSelect={handleProjectSelect}
-              onCreateProject={handleCreateProject}
-            />
+            <ProjectSidebar projects={selectedWorkspace?.projects || []} selectedProject={selectedProject} onProjectSelect={handleProjectSelect} onCreateProject={handleCreateProject} />
           </Box>
         </Drawer>
 
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
           <Toolbar />
-          
           {selectedProject && (
             <>
               <FilterBar
                 filterView={filterView}
-                onFilterViewChange={handleFilterViewChange}
+                onFilterViewChange={setFilterView}
                 selectedPeople={selectedPeople}
                 onPeopleChange={handlePeopleChange}
                 searchText={searchText}
@@ -309,6 +235,9 @@ function App() {
                 onCreateTicket={handleCreateTicket}
                 users={workspaceUsers}
                 showListControls={filterView === 'list'}
+                projectName={selectedProject.name}
+                personMode={personMode}
+                onPersonModeChange={setPersonMode}
               />
 
               <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
@@ -323,18 +252,13 @@ function App() {
                   onTicketSelect={handleTicketSelect}
                   onMoveTicket={handleMoveTicket}
                   users={workspaceUsers}
+                  personMode={personMode}
+                  onAssignToUser={handleAssignTicket}
                 />
               </Box>
             </>
           )}
-
-          {!selectedProject && (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography variant="h5" color="text.secondary">
-                {selectedWorkspace ? 'Select or create a project to get started' : 'Create or select a workspace to get started'}
-              </Typography>
-            </Box>
-          )}
+          {!selectedProject && (<Box sx={{ p: 3, textAlign: 'center' }}><Typography variant="h5" color="text.secondary">{selectedWorkspace ? 'Select or create a project to get started' : 'Create or select a workspace to get started'}</Typography></Box>)}
         </Box>
 
         {selectedTicket && (
@@ -343,24 +267,7 @@ function App() {
             onClose={handleCloseTicketDetail}
             users={workspaceUsers}
             projects={selectedWorkspace ? selectedWorkspace.projects : [] as any}
-            onAssign={async (ticketId, assigneeId, comment) => {
-              if (!selectedWorkspace || !selectedProject) return;
-              const historyEntry = { id: Math.random().toString(36).slice(2,10), action: 'assigned', toUser: { id: assigneeId } as any, timestamp: new Date(), userId: 'web', comment } as any;
-              // optimistic update in list
-              setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, assignedTo: assigneeId, updatedAt: new Date(), history: [...t.history, historyEntry] } : t));
-              // optimistic update in detail
-              if (selectedTicket && selectedTicket.id === ticketId) {
-                setSelectedTicket({ ...selectedTicket, assignedTo: assigneeId, updatedAt: new Date(), history: [...selectedTicket.history, historyEntry] });
-              }
-              try {
-                await repo.updateTicketAssignee(selectedWorkspace.id, selectedProject.id, ticketId, assigneeId, comment);
-              } catch (e) {
-                const list = await repo.listTickets(selectedWorkspace.id, selectedProject.id);
-                setTickets(list);
-                const found = list.find(t => t.id === ticketId);
-                if (found) setSelectedTicket(found);
-              }
-            }}
+            onAssign={async (ticketId, assigneeId, comment) => { await handleAssignTicket(ticketId, assigneeId, comment); }}
           />
         )}
 
