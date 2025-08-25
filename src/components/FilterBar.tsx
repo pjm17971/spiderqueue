@@ -117,7 +117,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
         </Box>
 
         {/* Person mode controls */}
-        {filterView === 'person' && (
+        {filterView === 'home' && (
           <>
             <Divider orientation="vertical" flexItem />
             <Box>

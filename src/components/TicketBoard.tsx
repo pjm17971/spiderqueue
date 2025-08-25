@@ -76,7 +76,7 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result; if (!destination) return;
     const dest = destination.droppableId;
-    if (filterView === 'person' && personMode === 'assign') {
+    if (filterView === 'home' && personMode === 'assign') {
       // Assign mode: allow dropping into user columns or hold/inbox
       if (dest.startsWith('user:')) {
         const userId = dest.slice('user:'.length);
@@ -87,7 +87,7 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
       return;
     }
     if (dest === source.droppableId) return;
-    if (filterView === 'person' && personMode === 'overview') {
+    if (filterView === 'home' && personMode === 'overview') {
       // Overview: only allow inbox<->hold for unassigned
       if ((dest === 'inbox' || dest === 'hold') && (source.droppableId === 'inbox' || source.droppableId === 'hold')) {
         onMoveTicket(draggableId, dest as TicketStatus);
@@ -202,7 +202,7 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
     );
   };
 
-  if (filterView === 'person' && personMode === 'assign') {
+  if (filterView === 'home' && personMode === 'assign') {
     return (
       <Box sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <DragDropContext onDragEnd={onDragEnd}>{renderAssignBoard()}</DragDropContext>
@@ -215,7 +215,7 @@ const TicketBoard: React.FC<TicketBoardProps> = ({
     <Box sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <DragDropContext onDragEnd={onDragEnd}>
         <Grid container spacing={2} sx={{ height: '100%', p: 2 }}>
-          {columns.map((c) => renderColumn(c.id, c.title, c.color, filterView !== 'person' || personMode !== 'overview' || c.id === 'inbox' || c.id === 'hold'))}
+          {columns.map((c) => renderColumn(c.id, c.title, c.color, filterView !== 'home' || personMode !== 'overview' || c.id === 'inbox' || c.id === 'hold'))}
         </Grid>
       </DragDropContext>
     </Box>
